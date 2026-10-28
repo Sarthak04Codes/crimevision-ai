@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>CrimeVision AI</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Serif:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f5f7;--card:#fff;--ink:#14202b;--mute:#5b6b7a;--line:#d5dce3;--accent:#2f5d8a;--on:#fff;--tag:#f2c94c;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#0f1a24;--card:#17242f;--ink:#e8eef3;--mute:#9bacbb;--line:#2a3b4a;--accent:#7fb0e0;--on:#0f1a24}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#0f1a24;--card:#17242f;--ink:#e8eef3;--mute:#9bacbb;--line:#2a3b4a;--accent:#7fb0e0;--on:#0f1a24}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "IBM Plex Sans",system-ui,sans-serif}
+main{max-width:1000px;margin:0 auto;padding:24px 16px 64px;display:grid;gap:20px;grid-template-columns:minmax(0,320px) minmax(0,1fr);align-items:start}
+@media(max-width:760px){main{grid-template-columns:1fr}}
+header{grid-column:1/-1}
+h1{font:600 28px "IBM Plex Serif",Georgia,serif;margin:0}
+h3{font-size:15px;margin:0 0 4px}
+.mute{color:var(--mute);margin:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:16px}
+button{font:inherit;cursor:pointer}
+.tabs{display:flex;gap:6px;margin:12px 0}
+.tabs button{flex:1;padding:8px;border:1px solid var(--line);background:none;color:var(--ink);border-radius:4px}
+.tabs .on{background:var(--accent);color:var(--on);border-color:var(--accent)}
+.go{width:100%;margin-top:12px;padding:10px;border:0;border-radius:4px;background:var(--accent);color:var(--on);font-weight:600}
+.go:disabled{opacity:.5;cursor:default}
+.tag{display:inline-flex;gap:14px;background:var(--tag);color:#14202b;padding:4px 10px;border-radius:3px;font-weight:600;font-size:14px;flex-wrap:wrap}
+.warn{background:var(--tag);color:#14202b;padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:14px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:16px 0}
+ul{padding-left:18px;margin:4px 0}
+.tl{padding:0}.tl li{list-style:none;border-left:3px solid var(--accent);padding:2px 0 8px 12px}
+.me{color:var(--accent);font-weight:600}
+.row{display:flex;gap:8px;margin-top:8px}
+input[type=text]{flex:1;padding:8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);font:inherit}
+.row button{padding:8px 14px;border:0;border-radius:4px;background:var(--accent);color:var(--on)}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+</style></head>
+<body><div id="root"></div>
+<script src="https://cdn.jsdelivr.net/npm/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/htm@3.1.1/dist/htm.umd.js"></script>
+<script>
+const {useState}=React, html=htm.bind(React.createElement);
+const API="http://localhost:8000";
+const SAMPLE={case_id:"DEMO-001",crime_type:"Robbery",confidence:0.82,
+ summary:"Sample output: interior of a small shop at night. One person at the counter reaches toward the cashier while a second person waits near the door.",
+ objects:["Cash register","Counter","Entrance door","Ceiling camera"],
+ people:["Person at counter in dark hooded jacket","Cashier behind counter","Person standing near door"],
+ weapons:["Possible handgun in right hand of person at counter (low certainty)"],
+ timeline:[{time:"00:00",event:"Two people enter the shop"},{time:"00:04",event:"One person approaches the counter"},{time:"00:09",event:"Cashier opens the register"},{time:"00:15",event:"Both people leave through the door"}],transcript:""};
+const List=({t,a})=>html`<div><h3>${t}</h3>${a&&a.length?html`<ul>${a.map((x,i)=>html`<li key=${i}>${typeof x==="string"?x:JSON.stringify(x)}</li>`)}</ul>`:html`<p class="mute">None detected</p>`}</div>`;
+function App(){
+ const[kind,setKind]=useState("image"),[file,setFile]=useState(null),[busy,setBusy]=useState(false),
+  [res,setRes]=useState(null),[demo,setDemo]=useState(false),[msgs,setMsgs]=useState([]),[q,setQ]=useState("");
+ const pick=k=>{setKind(k);setFile(null)};
+ async function run(){
+  setBusy(true);setMsgs([]);setDemo(false);
+  try{const f=new FormData();f.append("file",file);
+   const r=await fetch(API+"/analyze/"+kind,{method:"POST",body:f});
+   if(!r.ok)throw 0;setRes(await r.json());
+  }catch(e){setDemo(true);setRes({...SAMPLE,kind})}
+  setBusy(false)}
+ async function ask(){
+  const question=q.trim();if(!question)return;setQ("");setMsgs(m=>[...m,{r:"me",t:question}]);
+  let a;
+  try{if(demo)throw 0;
+   const r=await fetch(API+"/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({case_id:res.case_id,question})});
+   a=(await r.json()).answer||"The backend returned an error."
+  }catch(e){a="Demo mode: run the backend to get real answers from the evidence."}
+  setMsgs(m=>[...m,{r:"ai",t:a}])}
+ return html`<main>
+  <header><h1>CrimeVision AI</h1><p class="mute">Upload evidence, get a structured analysis, then question it.</p></header>
+  <section class="card"><h3>Add evidence</h3>
+   <div class="tabs">${["image","video","audio"].map(k=>html`<button key=${k} class=${k===kind?"on":""} onClick=${()=>pick(k)}>${k[0].toUpperCase()+k.slice(1)}</button>`)}</div>
+   <input key=${kind} type="file" accept=${kind+"/*"} onChange=${e=>setFile(e.target.files[0])}/>
+   <button class="go" disabled=${!file||busy} onClick=${run}>${busy?"Analyzing…":"Analyze evidence"}</button></section>
+  <section>${!res?html`<div class="card"><p class="mute">Choose a file and select Analyze evidence. Results appear here.</p></div>`:html`<div class="card">
+   ${demo&&html`<div class="warn">Demo mode: the backend is not connected, so this is a sample case, not an analysis of your file.</div>`}
+   <span class="tag"><span>Case ${res.case_id}</span><span>${res.crime_type}</span><span>${Math.round((res.confidence||0)*100)}% confidence</span></span>
+   <p>${res.summary}</p>
+   <div class="grid"><${List} t="Objects" a=${res.objects}/><${List} t="People" a=${res.people}/><${List} t="Weapons" a=${res.weapons}/></div>
+   <h3>Event timeline</h3><ul class="tl">${(res.timeline||[]).map((e,i)=>html`<li key=${i}><b>${e.time}</b> ${e.event}</li>`)}</ul>
+   ${res.transcript&&html`<h3>Transcript</h3><p style=${{whiteSpace:"pre-line"}}>${res.transcript}</p>`}
+   <h3>Ask about this case</h3>
+   ${msgs.map((m,i)=>html`<p key=${i}><span class=${m.r==="me"?"me":"mute"}>${m.r==="me"?"You":"CrimeVision"}:</span> ${m.t}</p>`)}
+   <div class="row"><input type="text" value=${q} placeholder="Was a weapon visible?" onInput=${e=>setQ(e.target.value)} onKeyDown=${e=>e.key==="Enter"&&ask()}/><button onClick=${ask}>Ask</button></div>
+   ${!demo&&html`<p><a href=${API+"/report/"+res.case_id} target="_blank">Download PDF report</a></p>`}
+  </div>`}</section></main>`}
+ReactDOM.createRoot(document.getElementById("root")).render(html`<${App}/>`);
+</script></body></html>
